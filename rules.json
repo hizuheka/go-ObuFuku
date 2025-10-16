@@ -1,0 +1,35 @@
+{
+  "name_rules": [
+    { "old": "database", "new": "records" },
+    { "old": "document", "new": "item" },
+    { "old": "legacy_user", "new": "user" }
+  ],
+  "insert_rules": [
+    {
+      "target": "status",
+      "template": "<A>value1</A><B>%d</B>",
+      "counter": "main_counter"
+    }
+  ],
+  "value_rules": [
+    {
+      "target": "id",
+      "type": "prepend",
+      "params": {
+        "prefix": "00000"
+      }
+    },
+    {
+      "target": "data",
+      "type": "append",
+      "params": {
+        "suffix": "_processed"
+      }
+    }
+  ],
+  "counters": {
+    "main_counter": {
+      "start": 0
+    }
+  }
+}
