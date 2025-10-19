@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+  <metadata>
+    <author>Test Data Generator</author>
+    <timestamp>2025-10-20T02:40:00Z</timestamp>
+  </metadata>
+  <document>
+    <id>101</id>
+    <data>First set of important data.</data>
+    <status>active</status>
+  </document>
+  <document>
+    <id>102</id>
+    <data>Second set of critical information.</data>
+    <status>inactive</status>
+  </document>
+  <legacy_user>
+    <id>USR-99</id>
+    <name>Old User</name>
+  </legacy_user>
+  <document>
+    <id>103</id>
+    <data>Third piece of content.</data>
+    <status>pending</status>
+  </document>
+</database>
