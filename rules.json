@@ -2,7 +2,6 @@
   "name_rules": [
     { "old": "database", "new": "records" },
     { "old": "document", "new": "item" },
-    { "old": "legacy_user", "new": "user" }
   ],
   "insert_rules": [
     {
