@@ -8,42 +8,31 @@ import (
 
 // runTransform は、ルールファイルに基づいてXML変換処理を実行します。
 func runTransform(ruleFilepath, inputFilepath, outputFilepath string) error {
-	// --- ルールファイルの読み込み ---
+	// --- ルールファイルの読み込みと組み立て (この部分は変更ありません) ---
 	ruleFile, err := os.ReadFile(ruleFilepath)
 	if err != nil {
 		return fmt.Errorf("failed to read rule file '%s': %w", ruleFilepath, err)
 	}
-	
 	var config Config
 	if err := json.Unmarshal(ruleFile, &config); err != nil {
 		return fmt.Errorf("failed to parse rule file '%s': %w", ruleFilepath, err)
 	}
-
-	// --- JSON設定から実行用ルールを組み立て ---
-	
-	// カウンターの準備
 	counters := make(map[string]*Counter)
 	for name, counterConfig := range config.Counters {
 		counters[name] = &Counter{current: counterConfig.Start}
 	}
-
-	// NameRules の組み立て (単純なコピー)
 	var nameRules []NameReplaceRule
 	for _, r := range config.NameRules {
 		nameRules = append(nameRules, NameReplaceRule{OldName: r.Old, NewName: r.New})
 	}
-	
-	// InsertRules の組み立て
 	var insertRules []InsertBeforeRule
 	for _, r := range config.InsertRules {
 		insertRules = append(insertRules, InsertBeforeRule{
 			TargetTag:   r.Target,
 			XMLTemplate: r.Template,
-			Counter:     counters[r.Counter], // 名前でカウンターを紐付け
+			Counter:     counters[r.Counter],
 		})
 	}
-
-	// ValueRules の組み立て
 	var valueRules []ValueReplaceRule
 	for _, r := range config.ValueRules {
 		replaceFunc, err := buildValueReplaceFunc(r)
@@ -54,6 +43,10 @@ func runTransform(ruleFilepath, inputFilepath, outputFilepath string) error {
 			TargetTag:       r.Target,
 			ReplacementFunc: replaceFunc,
 		})
+	}
+	var wrapRules []WrapRule
+	for _, r := range config.WrapRules {
+		wrapRules = append(wrapRules, WrapRule{TargetTag: r.Target, WrapperTag: r.Wrapper})
 	}
 
 	// --- ファイルの準備 ---
@@ -69,8 +62,12 @@ func runTransform(ruleFilepath, inputFilepath, outputFilepath string) error {
 	}
 	defer outputFile.Close()
 
+	// 出力ファイルをcrlfWriterでラップする
+	writer := newCRLFWriter(outputFile)
+
 	// --- プロセッサの実行 ---
-	proc := newProcessor(inputFile, outputFile, nameRules, insertRules, valueRules)
+	// ラップしたwriterをプロセッサに渡す
+	proc := newProcessor(inputFile, writer, nameRules, insertRules, valueRules, wrapRules)
 	if err := proc.Run(); err != nil {
 		return fmt.Errorf("error processing XML: %w", err)
 	}

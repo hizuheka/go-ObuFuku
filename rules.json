@@ -1,13 +1,19 @@
 {
   "name_rules": [
     { "old": "database", "new": "records" },
-    { "old": "document", "new": "item" },
+    { "old": "document", "new": "item" }
   ],
   "insert_rules": [
     {
       "target": "status",
-      "template": "<A>value1</A><B>%d</B>",
-      "counter": "main_counter"
+      "template": "<insertBefore>%d</insertBefore>",
+      "counter": "insert_counter"
+    }
+  ],
+  "wrap_rules": [
+    {
+      "target": "item",
+      "wrapper": "content"
     }
   ],
   "value_rules": [
@@ -15,19 +21,12 @@
       "target": "id",
       "type": "prepend",
       "params": {
-        "prefix": "00000"
-      }
-    },
-    {
-      "target": "data",
-      "type": "append",
-      "params": {
-        "suffix": "_processed"
+        "prefix": "ID-"
       }
     }
   ],
   "counters": {
-    "main_counter": {
+    "insert_counter": {
       "start": 0
     }
   }
