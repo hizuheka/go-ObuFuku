@@ -8,17 +8,20 @@ import (
 
 // main関数は、サブコマンドのルーターとして機能します。
 func main() {
+	// サブコマンドが指定されているかチェック
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <command> [arguments]\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Available commands: transform\n")
 		os.Exit(1)
 	}
 
+	// 最初の引数をサブコマンドとして解釈
 	subcommand := os.Args[1]
 
+	// サブコマンドに応じて処理を分岐
 	switch subcommand {
 	case "transform":
-		// 引数の数をチェック (program + transform + rules + input + output = 5)
+		// transform コマンドの引数が正しいかチェック (program + transform + rules + input + output = 5)
 		if len(os.Args) != 5 {
 			fmt.Fprintf(os.Stderr, "Usage: %s transform <rules.json> <input.xml> <output.xml>\n", os.Args[0])
 			os.Exit(1)

@@ -10,6 +10,28 @@
       "counter": "insert_counter"
     }
   ],
+  "prepend_child_rules": [
+    {
+      "target": "root",
+      "template": "<added_child>hoge</added_child>"
+    },
+    {
+      "target": "item",
+      "template": "<prepended_counter>%d</prepended_counter>",
+      "counter": "prepend_counter"
+    }
+  ],
+  "insert_after_rules": [
+    {
+      "target": "id",
+      "template": "<added_after>hoge</added_after>"
+    },
+    {
+      "target": "message",
+      "template": "<counter_after>%d</counter_after>",
+      "counter": "after_counter"
+    }
+  ],
   "wrap_rules": [
     {
       "target": "item",
@@ -23,6 +45,16 @@
       "params": {
         "prefix": "ID-"
       }
+    }
+  ],
+  "raw_tags": [
+    "description",
+    "payload"
+  ],
+  "cdata_rules": [
+    {
+      "old": "&",
+      "new": "and"
     }
   ],
   "counters": {
