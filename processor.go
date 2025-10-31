@@ -21,12 +21,14 @@ type processor struct {
 	wrapRuleMap       map[string]string
 	cdataRules        []CdataRule
 	rawTagMap         map[string]bool
+	deleteTagMap      map[string]bool
 
 	elementStack []xml.StartElement
+	skipDepth    int // スキップ対象のネストの深さ
 }
 
 // newProcessor は、新しいprocessorを初期化します。
-func newProcessor(r io.Reader, w io.Writer, nameRules []NameReplaceRule, insertRules []InsertBeforeRule, insertAfterRules []InsertBeforeRule, prependChildRules []InsertBeforeRule, valueRules []ValueReplaceRule, wrapRules []WrapRule, cdataRules []CdataRule, rawTags []string) *processor {
+func newProcessor(r io.Reader, w io.Writer, nameRules []NameReplaceRule, insertRules []InsertBeforeRule, insertAfterRules []InsertBeforeRule, prependChildRules []InsertBeforeRule, valueRules []ValueReplaceRule, wrapRules []WrapRule, cdataRules []CdataRule, rawTags []string, deleteTags []string) *processor {
 	decoder := xml.NewDecoder(r)
 	encoder := xml.NewEncoder(w)
 	encoder.Indent("", "  ")
@@ -41,6 +43,11 @@ func newProcessor(r io.Reader, w io.Writer, nameRules []NameReplaceRule, insertR
 		rawMap[tag] = true
 	}
 
+	deleteMap := make(map[string]bool)
+	for _, tag := range deleteTags {
+		deleteMap[tag] = true
+	}
+
 	return &processor{
 		decoder:           decoder,
 		encoder:           encoder,
@@ -53,7 +60,9 @@ func newProcessor(r io.Reader, w io.Writer, nameRules []NameReplaceRule, insertR
 		wrapRuleMap:       wrapMap,
 		cdataRules:        cdataRules,
 		rawTagMap:         rawMap,
+		deleteTagMap:      deleteMap,
 		elementStack:      make([]xml.StartElement, 0),
+		skipDepth:         0,
 	}
 }
 
@@ -81,8 +90,11 @@ func (p *processor) Run() error {
 				return err
 			}
 		default:
-			if err := p.encoder.EncodeToken(elem); err != nil {
-				return fmt.Errorf("failed to encode token: %w", err)
+			// スキップ中でなければ、他のトークンも書き出す
+			if p.skipDepth == 0 {
+				if err := p.encoder.EncodeToken(elem); err != nil {
+					return fmt.Errorf("failed to encode token: %w", err)
+				}
 			}
 		}
 	}
@@ -91,6 +103,20 @@ func (p *processor) Run() error {
 
 // handleStartElement は、開始タグを処理します。
 func (p *processor) handleStartElement(se xml.StartElement) error {
+	// 既にスキップ中か確認
+	if p.skipDepth > 0 {
+		p.skipDepth++ // スキップ対象のネストを深くする
+		return nil    // 何も出力しない
+	}
+
+	// このタグが削除対象か確認
+	if p.deleteTagMap[se.Name.Local] {
+		p.skipDepth = 1 // スキップ開始
+		return nil      // 何も出力しない
+	}
+
+	// --- 以下、スキップ対象でない場合の処理 ---
+
 	// 前方挿入ルール
 	for _, rule := range p.insertRules {
 		if se.Name.Local == rule.TargetTag {
@@ -179,6 +205,13 @@ func (p *processor) handleStartElement(se xml.StartElement) error {
 
 // handleCharData は、テキストデータを処理します。
 func (p *processor) handleCharData(cd xml.CharData) error {
+	// スキップ中なら何もしない
+	if p.skipDepth > 0 {
+		return nil
+	}
+
+	// --- 以下、スキップ対象でない場合の処理 ---
+
 	// 空白のみのテキストノードは破棄
 	if len(strings.TrimSpace(string(cd))) == 0 {
 		return nil
@@ -239,6 +272,14 @@ func (p *processor) handleCharData(cd xml.CharData) error {
 
 // handleEndElement は、終了タグを処理します。
 func (p *processor) handleEndElement(ee xml.EndElement) error {
+	// スキップ中か確認
+	if p.skipDepth > 0 {
+		p.skipDepth-- // スキップ対象のネストを浅くする
+		return nil    // 何も出力しない
+	}
+
+	// --- 以下、スキップ対象でない場合の処理 ---
+
 	if len(p.elementStack) == 0 {
 		return fmt.Errorf("invalid XML structure")
 	}
