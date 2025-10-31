@@ -8,25 +8,12 @@ import (
 	"os"
 )
 
-// splitter はXML分割処理の状態を管理します
-type splitter struct {
-	decoder *xml.Decoder
-	writer  io.Writer // newCRLFWriterでラップされたもの
-	encoder *xml.Encoder
+// outputWriterFactory は、新しい出力先(io.WriteCloser)を生成する関数の型です。
+// テスト時にはファイルではなくメモリ上のバッファを返します。
+type outputWriterFactory func(part int) (io.WriteCloser, error)
 
-	splitTag  string
-	maxSize   int64 // バイト単位
-	outPrefix string
-
-	elementStack []xml.StartElement // 親タグの階層
-	xmlDecl      []byte             // XML宣言 (<?xml ...?>)
-
-	fileCounter int
-	currentFile *os.File
-	currentSize int64
-}
-
-// runSplit はsplitコマンドのエントリポイントです
+// runSplit はsplitコマンドの公開エントリポイントです。
+// 実際のファイルシステム操作を担当します。
 func runSplit(splitTag string, maxKB int, inputPath, outputPrefix string) error {
 	inputFile, err := os.Open(inputPath)
 	if err != nil {
@@ -34,24 +21,65 @@ func runSplit(splitTag string, maxKB int, inputPath, outputPrefix string) error 
 	}
 	defer inputFile.Close()
 
-	// XML宣言を読み飛ばし、保持します
-	bufReader := bufio.NewReader(inputFile)
-	xmlDecl, err := bufReader.ReadBytes('\n')
-	if err != nil && err != io.EOF {
-		return fmt.Errorf("failed to read XML declaration: %w", err)
+	// 実際のファイルを作成するファクトリ関数（クロージャ）
+	factory := func(part int) (io.WriteCloser, error) {
+		filename := fmt.Sprintf("%s%d.xml", outputPrefix, part)
+		return os.Create(filename)
 	}
 
-	s := &splitter{
-		decoder:      xml.NewDecoder(bufReader), // 宣言を読み飛ばしたリーダーを使用
-		splitTag:     splitTag,
-		maxSize:      int64(maxKB) * 1024,
-		outPrefix:    outputPrefix,
-		xmlDecl:      xmlDecl,
-		fileCounter:  0,
-		elementStack: make([]xml.StartElement, 0),
+	// XML宣言を読み飛ばすリーダー
+	bufReader := bufio.NewReader(inputFile)
+
+	// コアロジックの呼び出し
+	s, err := newSplitter(bufReader, factory, splitTag, int64(maxKB)*1024)
+	if err != nil {
+		return err
 	}
 
 	return s.process()
+}
+
+// splitter はXML分割処理の状態を管理します
+type splitter struct {
+	decoder *xml.Decoder
+	factory outputWriterFactory // os.Createの代わり
+	encoder *xml.Encoder
+
+	splitTag string
+	maxSize  int64 // バイト単位
+
+	elementStack []xml.StartElement // 親タグの階層
+	xmlDecl      []byte           // XML宣言 (<?xml ...?>)
+
+	fileCounter    int
+	currentWriter  io.WriteCloser // *os.File から io.WriteCloser に変更
+	currentCounter *countingWriter  // サイズ計測用
+	currentSize    int64
+}
+
+// newSplitter は splitter のコアロジックを初期化します
+func newSplitter(reader io.Reader, factory outputWriterFactory, splitTag string, maxSize int64) (*splitter, error) {
+	// XML宣言を読み飛ばし、保持します
+	bufReader, ok := reader.(*bufio.Reader)
+	if !ok {
+		bufReader = bufio.NewReader(reader)
+	}
+	
+	xmlDecl, err := bufReader.ReadBytes('\n')
+	if err != nil && err != io.EOF {
+		return nil, fmt.Errorf("failed to read XML declaration: %w", err)
+	}
+
+	s := &splitter{
+		decoder:    xml.NewDecoder(bufReader),
+		factory:    factory,
+		splitTag:   splitTag,
+		maxSize:    maxSize,
+		xmlDecl:    xmlDecl,
+		fileCounter: 0,
+		elementStack: make([]xml.StartElement, 0),
+	}
+	return s, nil
 }
 
 // process はトークンをループ処理します
@@ -89,7 +117,7 @@ func (s *splitter) process() error {
 	}
 
 	// 最後のファイルを閉じる
-	if s.currentFile != nil {
+	if s.currentWriter != nil {
 		return s.closeCurrentFile()
 	}
 	return nil
@@ -104,10 +132,7 @@ func (s *splitter) handleStartElement(se xml.StartElement) error {
 		}
 	}
 
-	// スタックに積む
 	s.elementStack = append(s.elementStack, se)
-
-	// エンコーダーに書き込む
 	return s.encoder.EncodeToken(se)
 }
 
@@ -125,33 +150,30 @@ func (s *splitter) handleEndElement(ee xml.EndElement) error {
 		return fmt.Errorf("invalid XML structure: unexpected end element")
 	}
 
-	// エンコーダーに書き込む
 	if err := s.encoder.EncodeToken(ee); err != nil {
 		return err
 	}
 
-	// スタックからポップ
 	if len(s.elementStack) > 0 {
 		s.elementStack = s.elementStack[:len(s.elementStack)-1]
 	}
 
 	// このタグが分割タグかチェック
 	if ee.Name.Local == s.splitTag {
-		// 分割タグが完了した時点でファイルサイズをチェック
 		if err := s.encoder.Flush(); err != nil {
 			return err
 		}
-
-		stat, err := s.currentFile.Stat()
-		if err != nil {
-			return err
-		}
-		s.currentSize = stat.Size()
+		
+		// os.Statの代わりにcountingWriterからサイズを取得
+		s.currentSize = s.currentCounter.count
 
 		// サイズ超過、またはmaxSizeが0（＝1タグ1ファイル）の場合、次のファイルへ
-		if s.currentSize >= s.maxSize && s.maxSize > 0 {
-			if err := s.openNewFile(); err != nil {
-				return err
+		if (s.currentSize >= s.maxSize && s.maxSize > 0) || s.maxSize == 0 {
+			// ただし、ルート要素の終了タグの場合は分割しない
+			if len(s.elementStack) > 0 {
+				if err := s.openNewFile(); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -161,28 +183,28 @@ func (s *splitter) handleEndElement(ee xml.EndElement) error {
 // openNewFile は現在のファイルを閉じ、新しいファイルを開きます
 func (s *splitter) openNewFile() error {
 	// 1. (もしあれば) 古いファイルを閉じる
-	if s.currentFile != nil {
+	if s.currentWriter != nil {
 		if err := s.closeCurrentFile(); err != nil {
 			return err
 		}
 	}
 
-	// 2. 新しいファイルを作成
+	// 2. ファクトリ経由で新しいWriterを作成
 	s.fileCounter++
-	filename := fmt.Sprintf("%s%d.xml", s.outPrefix, s.fileCounter)
-	file, err := os.Create(filename)
+	file, err := s.factory(s.fileCounter)
 	if err != nil {
 		return err
 	}
-	s.currentFile = file
+	s.currentWriter = file // io.WriteCloserを保持
 
 	// 3. ライターとエンコーダーを設定
-	s.writer = newCRLFWriter(file) // 既存のcrlfWriter.goを活用
-	s.encoder = xml.NewEncoder(s.writer)
-	s.encoder.Indent("", "  ") // 整形
+	s.currentCounter = &countingWriter{w: file} // countingWriterでラップ
+	writer := newCRLFWriter(s.currentCounter)     // crlfWriterでラップ
+	s.encoder = xml.NewEncoder(writer)
+	s.encoder.Indent("", "  ")
 
 	// 4. XML宣言を書き込む
-	if _, err := s.writer.Write(s.xmlDecl); err != nil {
+	if _, err := writer.Write(s.xmlDecl); err != nil {
 		return err
 	}
 
@@ -211,5 +233,5 @@ func (s *splitter) closeCurrentFile() error {
 		return err
 	}
 
-	return s.currentFile.Close()
+	return s.currentWriter.Close()
 }
