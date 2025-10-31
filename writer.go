@@ -17,9 +17,29 @@ func newCRLFWriter(w io.Writer) *crlfWriter {
 }
 
 // Write は io.Writer インターフェースを実装します。
-// 書き込まれるデータ内のLFをCRLFに置換してから、元のWriterに渡します。
 func (cw *crlfWriter) Write(p []byte) (n int, err error) {
-	// \n を \r\n に置換
 	crlfBytes := bytes.ReplaceAll(p, []byte{'\n'}, []byte{'\r', '\n'})
 	return cw.w.Write(crlfBytes)
+}
+
+// countingWriter は、io.Writerをラップし、書き込まれたバイト数をカウントします。
+type countingWriter struct {
+	w     io.Writer
+	count int64
+}
+
+// Write は io.Writer インターフェースを実装します。
+func (cw *countingWriter) Write(p []byte) (n int, err error) {
+	n, err = cw.w.Write(p)
+	cw.count += int64(n)
+	return n, err
+}
+
+// Close は、io.CloserのWriteCloserに対応するために追加します。
+// (元のWriterがCloserでなければ何もしない)
+func (cw *countingWriter) Close() error {
+	if closer, ok := cw.w.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
 }
