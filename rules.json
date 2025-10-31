@@ -45,7 +45,25 @@
       "params": {
         "prefix": "ID-"
       }
+    },
+    {
+      "target": "status",
+      "type": "append",
+      "params": {
+        "suffix": " (processed)"
+      }
+    },
+    {
+      "target": "notes",
+      "type": "remove_string",
+      "params": {
+        "remove": "OBSOLETE: "
+      }
     }
+  ],
+  "delete_tags": [
+    "temp_log",
+    "obsolete_data"
   ],
   "raw_tags": [
     "description",
@@ -55,6 +73,10 @@
     {
       "old": "&",
       "new": "and"
+    },
+    {
+      "old": "<internal>",
+      "new": "<internal_processed>"
     }
   ],
   "counters": {
