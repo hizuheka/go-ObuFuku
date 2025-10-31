@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 )
 
 // Counter は、インクリメントする数値を管理します。
@@ -51,6 +52,7 @@ type Config struct {
 	WrapRules         []ConfigWrapRule         `json:"wrap_rules"`
 	CdataRules        []ConfigCdataRule        `json:"cdata_rules"`
 	RawTags           []string                 `json:"raw_tags"`
+	DeleteTags        []string                 `json:"delete_tags"`
 	Counters          map[string]ConfigCounter `json:"counters"`
 }
 
@@ -100,6 +102,15 @@ func buildValueReplaceFunc(rule ConfigValueRule) (ValueReplaceFunc, error) {
 		}
 		return func(oldValue string) string {
 			return oldValue + suffix
+		}, nil
+
+	case "remove_string":
+		remove, ok := rule.Params["remove"].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid or missing 'remove' for remove_string rule")
+		}
+		return func(oldValue string) string {
+			return strings.ReplaceAll(oldValue, remove, "")
 		}, nil
 
 	default:
