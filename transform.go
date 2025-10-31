@@ -91,6 +91,9 @@ func runTransform(ruleFilepath, inputFilepath, outputFilepath string) error {
 	// RawTags はそのままスライスとして使う
 	rawTags := config.RawTags
 
+	// DeleteTags はそのままスライスとして使う
+	deleteTags := config.DeleteTags
+
 	// --- ファイルの準備 ---
 	inputFile, err := os.Open(inputFilepath)
 	if err != nil {
@@ -108,7 +111,7 @@ func runTransform(ruleFilepath, inputFilepath, outputFilepath string) error {
 	writer := newCRLFWriter(outputFile)
 
 	// --- プロセッサの実行 ---
-	proc := newProcessor(inputFile, writer, nameRules, insertRules, insertAfterRules, prependChildRules, valueRules, wrapRules, cdataRules, rawTags)
+	proc := newProcessor(inputFile, writer, nameRules, insertRules, insertAfterRules, prependChildRules, valueRules, wrapRules, cdataRules, rawTags, deleteTags)
 	if err := proc.Run(); err != nil {
 		return fmt.Errorf("error processing XML: %w", err)
 	}
