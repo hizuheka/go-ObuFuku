@@ -1,0 +1,43 @@
+name: Go Unit Test # ワークフローの名前
+
+on:
+  push:
+    branches: [ "main", "develop", "v2.0.0" ] # mainまたはdevelopブランチへのプッシュで実行
+  pull_request:
+    branches: [ "main", "develop" ] # mainまたはdevelopブランチへのプルリクエストで実行
+
+jobs:
+  test:
+    name: Run Go Tests
+    runs-on: ubuntu-latest # 実行環境のOSを指定
+
+    steps:
+      - uses: actions/checkout@v4 # リポジトリのコードをチェックアウト
+
+      - name: Set up Go
+        uses: actions/setup-go@v5 # Go言語の環境をセットアップ
+        with:
+          go-version: '1.21' # 使用するGoのバージョンを指定
+          # go.modファイルがあれば、以下の設定で依存関係のキャッシュが有効になります
+          cache-dependency-path: '**/go.sum' 
+
+      - name: Download dependencies
+        run: go mod download # 依存関係をダウンロード（go.modがある場合）
+
+      - name: Run Unit Tests
+        run: go test -v ./... # ユニットテストを実行
+        # -v: 詳細なログを出力
+        # ./: カレントディレクトリとそのサブディレクトリにあるすべてのテストを実行
+
+      # テストカバレッジを取得したい場合 (オプション)
+      # - name: Run Unit Tests with Coverage
+      #   run: go test -v ./... -coverprofile=coverage.out
+      # 
+      # - name: Check Coverage (例: 80%未満なら失敗)
+      #   run: |
+      #     COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print substr($3, 1, length($3)-1)}')
+      #     echo "Code coverage is $COVERAGE%"
+      #     if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+      #       echo "Code coverage is below 80%. Failing build."
+      #       exit 1
+      #     fi
