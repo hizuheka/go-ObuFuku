@@ -2,7 +2,7 @@ name: Go Unit Test # ワークフローの名前
 
 on:
   push:
-    branches: [ "main", "develop", "v2.0.0" ] # mainまたはdevelopブランチへのプッシュで実行
+    branches: [ "main", "develop", "v0.2.0" ] # mainまたはdevelopブランチへのプッシュで実行
   pull_request:
     branches: [ "main", "develop" ] # mainまたはdevelopブランチへのプルリクエストで実行
 
