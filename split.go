@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 // outputWriterFactory は、新しい出力先(io.WriteCloser)を生成する関数の型です。
@@ -49,11 +50,11 @@ type splitter struct {
 	maxSize  int64 // バイト単位
 
 	elementStack []xml.StartElement // 親タグの階層
-	xmlDecl      []byte           // XML宣言 (<?xml ...?>)
+	xmlDecl      []byte             // XML宣言 (<?xml ...?>)
 
 	fileCounter    int
-	currentWriter  io.WriteCloser // *os.File から io.WriteCloser に変更
-	currentCounter *countingWriter  // サイズ計測用
+	currentWriter  io.WriteCloser  // *os.File から io.WriteCloser に変更
+	currentCounter *countingWriter // サイズ計測用
 	currentSize    int64
 }
 
@@ -64,19 +65,19 @@ func newSplitter(reader io.Reader, factory outputWriterFactory, splitTag string,
 	if !ok {
 		bufReader = bufio.NewReader(reader)
 	}
-	
+
 	xmlDecl, err := bufReader.ReadBytes('\n')
 	if err != nil && err != io.EOF {
 		return nil, fmt.Errorf("failed to read XML declaration: %w", err)
 	}
 
 	s := &splitter{
-		decoder:    xml.NewDecoder(bufReader),
-		factory:    factory,
-		splitTag:   splitTag,
-		maxSize:    maxSize,
-		xmlDecl:    xmlDecl,
-		fileCounter: 0,
+		decoder:      xml.NewDecoder(bufReader),
+		factory:      factory,
+		splitTag:     splitTag,
+		maxSize:      maxSize,
+		xmlDecl:      xmlDecl,
+		fileCounter:  0,
 		elementStack: make([]xml.StartElement, 0),
 	}
 	return s, nil
@@ -138,10 +139,18 @@ func (s *splitter) handleStartElement(se xml.StartElement) error {
 
 // handleCharData はテキストを処理します
 func (s *splitter) handleCharData(cd xml.CharData) error {
-	if s.encoder != nil {
-		return s.encoder.EncodeToken(cd)
+	if s.encoder == nil {
+		return nil // まだ書き込み先がない場合は何もしない
 	}
-	return nil
+
+	// 空白のみのテキストノードは破棄する
+	// これにより、元のXMLの改行が二重に出力されるのを防ぐ
+	if len(strings.TrimSpace(string(cd))) == 0 {
+		return nil
+	}
+
+	// 意味のあるテキストデータのみを書き込む
+	return s.encoder.EncodeToken(cd)
 }
 
 // handleEndElement は終了タグを処理します
@@ -163,7 +172,7 @@ func (s *splitter) handleEndElement(ee xml.EndElement) error {
 		if err := s.encoder.Flush(); err != nil {
 			return err
 		}
-		
+
 		// os.Statの代わりにcountingWriterからサイズを取得
 		s.currentSize = s.currentCounter.count
 
@@ -199,7 +208,7 @@ func (s *splitter) openNewFile() error {
 
 	// 3. ライターとエンコーダーを設定
 	s.currentCounter = &countingWriter{w: file} // countingWriterでラップ
-	writer := newCRLFWriter(s.currentCounter)     // crlfWriterでラップ
+	writer := newCRLFWriter(s.currentCounter)   // crlfWriterでラップ
 	s.encoder = xml.NewEncoder(writer)
 	s.encoder.Indent("", "  ")
 
