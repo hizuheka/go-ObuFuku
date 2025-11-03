@@ -32,22 +32,21 @@ func TestSplitter(t *testing.T) {
 </A>`
 
 	// 期待されるヘッダーとフッター
-	const header = `<?xml version="1.0" encoding="UTF-8"?>` + "\r\n" + `<A>\r\n  <B>\r\n`
-	const footer = `\r\n  </B>\r\n</A>\r\n`
-	
-	// 期待されるCタグの断片
-	c1 := `    <C>\r\n      <D>d1</D>\r\n    </C>`
-	c2 := `    <C>\r\n      <D>d2</D>\r\n    </C>`
-	c3 := `    <C>\r\n      <D>d3</D>\r\n    </C>`
-	c4 := `    <C>\r\n      <D>d4</D>\r\n    </C>`
+	const header = `<?xml version="1.0" encoding="UTF-8"?>` + "\r\n" + "<A>\r\n  <B>\r\n"
+	const footer = "\r\n  </B>\r\n</A>\r\n"
 
+	// 期待されるCタグの断片
+	c1 := "    <C>\r\n      <D>d1</D>\r\n    </C>"
+	c2 := "    <C>\r\n      <D>d2</D>\r\n    </C>"
+	c3 := "    <C>\r\n      <D>d3</D>\r\n    </C>"
+	c4 := "    <C>\r\n      <D>d4</D>\r\n    </C>"
 
 	testCases := []struct {
-		name           string
-		splitTag       string
-		maxSize        int64
-		expectedFiles  map[int]string // 期待されるファイルの内容
-		expectedErr    bool           // エラーを期待するか
+		name          string
+		splitTag      string
+		maxSize       int64
+		expectedFiles map[int]string // 期待されるファイルの内容
+		expectedErr   bool           // エラーを期待するか
 	}{
 		{
 			name:     "1ファイル1タグ (maxSize 0)",
@@ -71,7 +70,7 @@ func TestSplitter(t *testing.T) {
 		{
 			name:     "サイズベースの分割 (Cタグ2つ分)",
 			splitTag: "C",
-			maxSize:  int64(len(header) + len(c1) + len(c2) + 10), // Cタグ2つ強のサイズ
+			maxSize:  int64(len(header) + len(c1) + len(c2) - 10), // Cタグ2つ強のサイズ
 			expectedFiles: map[int]string{
 				// 1ファイル目にc1, c2が入る (サイズチェックはc2の後)
 				1: header + c1 + "\r\n" + c2 + footer,
@@ -116,9 +115,10 @@ func TestSplitter(t *testing.T) {
 			if err != nil && !tc.expectedErr {
 				t.Fatalf("newSplitterで予期せぬエラー: %v", err)
 			}
-			
+
 			err = s.process()
 
+			fmt.Printf("maxsize=%d\n", tc.maxSize)
 			// --- アサーション (結果の検証) ---
 			if tc.expectedErr {
 				if err == nil {
@@ -141,7 +141,7 @@ func TestSplitter(t *testing.T) {
 				if !ok {
 					t.Fatalf("期待したファイル %d が生成されていません", i)
 				}
-				
+
 				// TrimSpaceで末尾の改行を揃えて比較
 				actual := strings.TrimSpace(actualContent.String())
 				expected := strings.TrimSpace(expectedContent)
@@ -157,7 +157,7 @@ func TestSplitter(t *testing.T) {
 // TestSplitterFactoryError はファクトリがエラーを返すケースをテストします
 func TestSplitterFactoryError(t *testing.T) {
 	factoryErr := fmt.Errorf("ディスクがいっぱいです")
-	
+
 	factory := func(part int) (io.WriteCloser, error) {
 		return nil, factoryErr
 	}
