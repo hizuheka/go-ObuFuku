@@ -13,19 +13,20 @@ const bufferSize = 64 * 1024
 
 // NewlineProcessor は改行挿入処理の状態を保持します。
 type NewlineProcessor struct {
-	reader   io.Reader
-	writer   io.Writer
-	target   []byte
-	position string // "before" or "after"
+	reader       io.Reader
+	writer       io.Writer
+	targets      [][]byte // 複数のターゲットをバイト列で保持
+	maxTargetLen int      // 最も長いターゲットの長さ（持ち越し計算用）
+	position     string
 }
 
 // runNewline はファイルI/Oをセットアップし、プロセッサを実行します。
-func runNewline(targetStr, position, inputPath, outputPath string) error {
+func runNewline(targetStrs []string, position, inputPath, outputPath string) error {
 	if position != "before" && position != "after" {
 		return fmt.Errorf("invalid position '%s': must be 'before' or 'after'", position)
 	}
-	if len(targetStr) == 0 {
-		return fmt.Errorf("target string cannot be empty")
+	if len(targetStrs) == 0 {
+		return fmt.Errorf("target strings cannot be empty")
 	}
 
 	// 入力ファイル
@@ -45,17 +46,33 @@ func runNewline(targetStr, position, inputPath, outputPath string) error {
 	// CRLF変換ライターを使用（書き込むときは \n だけで済むようにする）
 	crlfWriter := newCRLFWriter(outputFile)
 
-	processor := newNewlineProcessor(inputFile, crlfWriter, targetStr, position)
+	processor := newNewlineProcessor(inputFile, crlfWriter, targetStrs, position)
 	return processor.process()
 }
 
 // newNewlineProcessor はプロセッサを初期化します。
-func newNewlineProcessor(r io.Reader, w io.Writer, targetStr, position string) *NewlineProcessor {
+func newNewlineProcessor(r io.Reader, w io.Writer, targetStrs []string, position string) *NewlineProcessor {
+	var targets [][]byte
+	maxLen := 0
+
+	// 文字列スライスをバイト列スライスに変換しつつ、最大長を計算
+	for _, s := range targetStrs {
+		if len(s) == 0 {
+			continue
+		}
+		b := []byte(s)
+		targets = append(targets, b)
+		if len(b) > maxLen {
+			maxLen = len(b)
+		}
+	}
+
 	return &NewlineProcessor{
-		reader:   r,
-		writer:   w,
-		target:   []byte(targetStr),
-		position: position,
+		reader:       r,
+		writer:       w,
+		targets:      targets,
+		maxTargetLen: maxLen,
+		position:     position,
 	}
 }
 
@@ -63,15 +80,7 @@ func newNewlineProcessor(r io.Reader, w io.Writer, targetStr, position string) *
 func (p *NewlineProcessor) process() error {
 	buf := make([]byte, bufferSize)
 	var leftover []byte
-
-	// 置換用のデータを作成
-	var replacement []byte
-	newline := []byte("\n") // crlfWriterが \r\n に変換してくれる
-	if p.position == "before" {
-		replacement = append(newline, p.target...)
-	} else {
-		replacement = append(p.target, newline...)
-	}
+	newline := []byte("\n")
 
 	for {
 		// バッファに読み込み
@@ -80,9 +89,9 @@ func (p *NewlineProcessor) process() error {
 			// 前回の持ち越し分と結合
 			data := append(leftover, buf[:n]...)
 
-			// 結合したデータ内でターゲットを検索・置換して書き込み
-			// 未処理の末尾（持ち越し分）を返す
-			leftover, err = p.processChunk(data, replacement)
+			// バッファ内の検索と置換
+			// 戻り値として「次に持ち越すべきデータ」を受け取る
+			leftover, err = p.processChunk(data, newline)
 			if err != nil {
 				return err
 			}
@@ -106,35 +115,61 @@ func (p *NewlineProcessor) process() error {
 	return nil
 }
 
-// processChunk は、データ内のターゲット文字列を置換して書き込み、
-// 次回に持ち越すべき「末尾のデータ」を返します。
-func (p *NewlineProcessor) processChunk(data, replacement []byte) ([]byte, error) {
-	// bytes.Indexで検索し、見つかる限り置換して書き込む
+// processChunk は複数のターゲットを検索し、見つかった順に処理します
+func (p *NewlineProcessor) processChunk(data, newline []byte) ([]byte, error) {
 	for {
-		idx := bytes.Index(data, p.target)
-		if idx == -1 {
+		// 複数のターゲットの中で、最も「手前（小さいインデックス）」にあるものを探す
+		bestIdx := -1
+		var bestTarget []byte
+
+		for _, t := range p.targets {
+			idx := bytes.Index(data, t)
+			if idx != -1 {
+				// まだ見つかっていない、または、より手前にある場合
+				if bestIdx == -1 || idx < bestIdx {
+					bestIdx = idx
+					bestTarget = t
+				}
+			}
+		}
+
+		// 何も見つからなければループ終了
+		if bestIdx == -1 {
 			break
 		}
 
 		// マッチした箇所の「手前」まで書き込む
-		if _, err := p.writer.Write(data[:idx]); err != nil {
+		if _, err := p.writer.Write(data[:bestIdx]); err != nil {
 			return nil, err
 		}
 
-		// 「置換後の文字列（改行付き）」を書き込む
-		if _, err := p.writer.Write(replacement); err != nil {
-			return nil, err
+		// ターゲット文字列と改行を書き込む
+		if p.position == "before" {
+			// 改行 + ターゲット
+			if _, err := p.writer.Write(newline); err != nil {
+				return nil, err
+			}
+			if _, err := p.writer.Write(bestTarget); err != nil {
+				return nil, err
+			}
+		} else {
+			// ターゲット + 改行
+			if _, err := p.writer.Write(bestTarget); err != nil {
+				return nil, err
+			}
+			if _, err := p.writer.Write(newline); err != nil {
+				return nil, err
+			}
 		}
 
-		// 処理した部分をスライスから削除
-		data = data[idx+len(p.target):]
+		// 処理した部分（ターゲット含む）までをデータから削除して次へ
+		data = data[bestIdx+len(bestTarget):]
 	}
 
 	// --- 持ち越し判定 ---
 	// 残ったデータの末尾に、ターゲット文字列の一部が含まれている可能性があるため、
-	// ターゲットの長さ - 1 バイト分は書き込まずに次へ持ち越す。
-
-	keepLen := len(p.target) - 1
+	// ターゲットの中で「最も長いもの」の長さ - 1 バイト分を持ち越す
+	keepLen := p.maxTargetLen - 1
 	if keepLen < 0 {
 		keepLen = 0
 	}

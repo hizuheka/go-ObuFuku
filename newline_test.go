@@ -11,15 +11,15 @@ import (
 func TestNewlineProcessor(t *testing.T) {
 	testCases := []struct {
 		name      string
-		target    string
+		targets   []string // 変更: string -> []string
 		position  string
 		input     string
-		expected  string // \n は crlfWriterなしの場合。テストヘルパーで調整する
-		chunkSize int    // テスト用に小さいバッファサイズを強制する（境界またぎを誘発するため）
+		expected  string
+		chunkSize int
 	}{
 		{
 			name:      "単純な改行 (Before)",
-			target:    "ITEM",
+			targets:   []string{"ITEM"},
 			position:  "before",
 			input:     "AAITEMBB",
 			expected:  "AA\nITEMBB",
@@ -27,7 +27,7 @@ func TestNewlineProcessor(t *testing.T) {
 		},
 		{
 			name:      "単純な改行 (After)",
-			target:    "ITEM",
+			targets:   []string{"ITEM"},
 			position:  "after",
 			input:     "AAITEMBB",
 			expected:  "AAITEM\nBB",
@@ -35,7 +35,7 @@ func TestNewlineProcessor(t *testing.T) {
 		},
 		{
 			name:      "連続するターゲット",
-			target:    "A",
+			targets:   []string{"A"},
 			position:  "after",
 			input:     "AAA",
 			expected:  "A\nA\nA\n",
@@ -43,7 +43,7 @@ func TestNewlineProcessor(t *testing.T) {
 		},
 		{
 			name:     "*** 境界またぎ (Overlap) のテスト ***",
-			target:   "TARGET",
+			targets:  []string{"TARGET"},
 			position: "before",
 			// TARGETの長さは6。ChunkSizeを4にすることで、"TARG" | "ET" のように分割させる
 			input:     "AAATARGETBBB",
@@ -52,7 +52,7 @@ func TestNewlineProcessor(t *testing.T) {
 		},
 		{
 			name:      "複数回の境界またぎ",
-			target:    "XX",
+			targets:   []string{"XX"},
 			position:  "after",
 			input:     "AXXBXXCXX",
 			expected:  "AXX\nBXX\nCXX\n",
@@ -60,7 +60,7 @@ func TestNewlineProcessor(t *testing.T) {
 		},
 		{
 			name:      "ターゲットなし",
-			target:    "XYZ",
+			targets:   []string{"XYZ"},
 			position:  "before",
 			input:     "ABCDEFG",
 			expected:  "ABCDEFG",
@@ -68,10 +68,42 @@ func TestNewlineProcessor(t *testing.T) {
 		},
 		{
 			name:      "空ファイル",
-			target:    "A",
+			targets:   []string{"A"},
 			position:  "before",
 			input:     "",
 			expected:  "",
+			chunkSize: 10,
+		},
+		{
+			name:      "複数ターゲット",
+			targets:   []string{"A", "B"},
+			position:  "after",
+			input:     "xAxxByyAzz",
+			expected:  "xA\nxxB\nyyA\nzz",
+			chunkSize: 1024,
+		},
+		{
+			name:      "複数ターゲット (出現順序が引数と逆)",
+			targets:   []string{"SECOND", "FIRST"},
+			position:  "before",
+			input:     "aaFIRSTbbSECONDcc",
+			expected:  "aa\nFIRSTbb\nSECONDcc",
+			chunkSize: 1024,
+		},
+		{
+			name:      "ターゲットの長さが異なる (Overlap)",
+			targets:   []string{"LONG", "S"},
+			position:  "before",
+			input:     "aaaLONGbbbSccc",
+			expected:  "aaa\nLONGbbb\nSccc",
+			chunkSize: 4, // "LONG" (4文字) が境界で分割されるようにする
+		},
+		{
+			name:      "ターゲット同士が接近している場合",
+			targets:   []string{",", ";"},
+			position:  "after",
+			input:     "a,b;c,d",
+			expected:  "a,\nb;\nc,\nd",
 			chunkSize: 10,
 		},
 	}
@@ -88,7 +120,7 @@ func TestNewlineProcessor(t *testing.T) {
 
 			// crlfWriterは使わず、直接 \n を期待値としてテストする
 			// (crlfWriterのロジック自体は writer.go で担保されているため)
-			processor := newNewlineProcessor(chunkedReader, outputBuf, tc.target, tc.position)
+			processor := newNewlineProcessor(chunkedReader, outputBuf, tc.targets, tc.position)
 
 			if err := processor.process(); err != nil {
 				t.Fatalf("処理中にエラーが発生しました: %v", err)

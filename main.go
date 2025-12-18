@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // main関数は、サブコマンドのルーターとして機能します。
@@ -38,17 +39,20 @@ func main() {
 
 	case "newline":
 		if len(os.Args) != 6 {
-			fmt.Fprintf(os.Stderr, "Usage: %s newline <target_string> <position> <input_file> <output_file>\n", os.Args[0])
-			fmt.Fprintf(os.Stderr, "  <target_string>: 改行の基準となる文字列\n")
-			fmt.Fprintf(os.Stderr, "  <position>     : 'before' or 'after'\n")
+			fmt.Fprintf(os.Stderr, "Usage: %s newline <target_strings> <position> <input_file> <output_file>\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "  <target_strings>: カンマ区切りのターゲット文字列 (例: \"<a>,<b>\")\n")
+			fmt.Fprintf(os.Stderr, "  <position>      : 'before' or 'after'\n")
 			os.Exit(1)
 		}
-		targetString := os.Args[2]
+		// カンマ区切りでスライスに変換
+		targetArg := os.Args[2]
+		targets := strings.Split(targetArg, ",")
+
 		position := os.Args[3]
 		inputFile := os.Args[4]
 		outputFile := os.Args[5]
 
-		if err := runNewline(targetString, position, inputFile, outputFile); err != nil {
+		if err := runNewline(targets, position, inputFile, outputFile); err != nil {
 			log.Fatalf("Error during newline processing: %v", err)
 		}
 		fmt.Println("Newline processing completed.")
