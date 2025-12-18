@@ -11,7 +11,7 @@ func main() {
 	// サブコマンドが指定されているかチェック
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <command> [arguments]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline, remove\n")
+		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline, remove, noline\n")
 		os.Exit(1)
 	}
 
@@ -77,9 +77,22 @@ func main() {
 		}
 		fmt.Println("Remove processing completed.")
 
+	case "noline":
+		if len(os.Args) != 4 {
+			fmt.Fprintf(os.Stderr, "Usage: %s noline <input_file> <output_file>\n", os.Args[0])
+			os.Exit(1)
+		}
+		inputFile := os.Args[2]
+		outputFile := os.Args[3]
+
+		if err := runNoLine(inputFile, outputFile); err != nil {
+			log.Fatalf("Error during noline processing: %v", err)
+		}
+		fmt.Println("NoLine processing completed.")
+
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: '%s'\n", subcommand)
-		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline, remove\n")
+		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline, remove, noline\n")
 		os.Exit(1)
 	}
 }
