@@ -11,7 +11,7 @@ func main() {
 	// サブコマンドが指定されているかチェック
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <command> [arguments]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline\n")
+		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline, remove\n")
 		os.Exit(1)
 	}
 
@@ -63,9 +63,23 @@ func main() {
 			log.Fatalf("Error during maxline processing: %v", err)
 		}
 
+	case "remove": // *** 追加 ***
+		if len(os.Args) != 5 {
+			fmt.Fprintf(os.Stderr, "Usage: %s remove <target_string> <input_file> <output_file>\n", os.Args[0])
+			os.Exit(1)
+		}
+		targetString := os.Args[2]
+		inputFile := os.Args[3]
+		outputFile := os.Args[4]
+
+		if err := runRemove(targetString, inputFile, outputFile); err != nil {
+			log.Fatalf("Error during remove processing: %v", err)
+		}
+		fmt.Println("Remove processing completed.")
+
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: '%s'\n", subcommand)
-		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline\n")
+		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline, remove\n")
 		os.Exit(1)
 	}
 }
