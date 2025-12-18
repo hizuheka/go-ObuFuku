@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 )
 
 // main関数は、サブコマンドのルーターとして機能します。
@@ -11,7 +12,7 @@ func main() {
 	// サブコマンドが指定されているかチェック
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <command> [arguments]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline, remove, noline\n")
+		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline, remove, noline, sort\n")
 		os.Exit(1)
 	}
 
@@ -63,7 +64,7 @@ func main() {
 			log.Fatalf("Error during maxline processing: %v", err)
 		}
 
-	case "remove": // *** 追加 ***
+	case "remove":
 		if len(os.Args) != 5 {
 			fmt.Fprintf(os.Stderr, "Usage: %s remove <target_string> <input_file> <output_file>\n", os.Args[0])
 			os.Exit(1)
@@ -90,9 +91,39 @@ func main() {
 		}
 		fmt.Println("NoLine processing completed.")
 
+	case "sort":
+		// 引数は 4つ (デフォルトメモリ) または 5つ (メモリ指定あり)
+		if len(os.Args) < 4 || len(os.Args) > 5 {
+			fmt.Fprintf(os.Stderr, "Usage: %s sort <input_file> <output_file> [memory_limit_mb]\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "  [memory_limit_mb]: Max memory usage in MB (default: 512)\n")
+			os.Exit(1)
+		}
+		inputFile := os.Args[2]
+		outputFile := os.Args[3]
+
+		// デフォルト 512MB
+		memoryLimitMB := 512
+
+		// 第4引数があればパースして上書き
+		if len(os.Args) == 5 {
+			var err error
+			memoryLimitMB, err = strconv.Atoi(os.Args[4])
+			if err != nil || memoryLimitMB <= 0 {
+				log.Fatalf("Error: <memory_limit_mb> must be a positive number: %v", err)
+			}
+		}
+
+		// MB を Byte に変換
+		memoryLimitBytes := int64(memoryLimitMB) * 1024 * 1024
+
+		if err := runSort(inputFile, outputFile, memoryLimitBytes); err != nil {
+			log.Fatalf("Error during sort processing: %v", err)
+		}
+		fmt.Printf("Sort processing completed. (Max Memory: %d MB)\n", memoryLimitMB)
+
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: '%s'\n", subcommand)
-		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline, remove, noline\n")
+		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline, remove, noline, sort\n")
 		os.Exit(1)
 	}
 }
