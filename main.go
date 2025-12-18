@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 )
 
 // main関数は、サブコマンドのルーターとして機能します。
@@ -12,7 +11,7 @@ func main() {
 	// サブコマンドが指定されているかチェック
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <command> [arguments]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "Available commands: transform, split\n")
+		fmt.Fprintf(os.Stderr, "Available commands: transform, newline\n")
 		os.Exit(1)
 	}
 
@@ -36,33 +35,26 @@ func main() {
 			log.Fatalf("Error during transform: %v", err)
 		}
 
-	case "split": // *** "split"コマンドの処理を新設 ***
+	case "newline":
 		if len(os.Args) != 6 {
-			fmt.Fprintf(os.Stderr, "Usage: %s split <split_tag> <max_kb> <input.xml> <output_prefix>\n", os.Args[0])
-			fmt.Fprintf(os.Stderr, "  <split_tag>: 分割の単位となるタグ名 (例: item)\n")
-			fmt.Fprintf(os.Stderr, "  <max_kb>: 1ファイルあたりのおおよその最大サイズ (KB)\n")
-			fmt.Fprintf(os.Stderr, "  <input.xml>: 分割対象のXMLファイル\n")
-			fmt.Fprintf(os.Stderr, "  <output_prefix>: 出力ファイル名の接頭辞 (例: output/split_)\n")
+			fmt.Fprintf(os.Stderr, "Usage: %s newline <target_string> <position> <input_file> <output_file>\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "  <target_string>: 改行の基準となる文字列\n")
+			fmt.Fprintf(os.Stderr, "  <position>     : 'before' or 'after'\n")
 			os.Exit(1)
 		}
+		targetString := os.Args[2]
+		position := os.Args[3]
+		inputFile := os.Args[4]
+		outputFile := os.Args[5]
 
-		splitTag := os.Args[2]
-		maxKB, err := strconv.Atoi(os.Args[3])
-		if err != nil {
-			log.Fatalf("Error: <max_kb> must be a number: %v", err)
+		if err := runNewline(targetString, position, inputFile, outputFile); err != nil {
+			log.Fatalf("Error during newline processing: %v", err)
 		}
-		inputFilepath := os.Args[4]
-		outputPrefix := os.Args[5]
-
-		if err := runSplit(splitTag, maxKB, inputFilepath, outputPrefix); err != nil {
-			log.Fatalf("Error during split: %v", err)
-		}
-
-		fmt.Println("XML splitting completed.")
+		fmt.Println("Newline processing completed.")
 
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: '%s'\n", subcommand)
-		fmt.Fprintf(os.Stderr, "Available commands: transform, split\n")
+		fmt.Fprintf(os.Stderr, "Available commands: transform, newline\n")
 		os.Exit(1)
 	}
 }
