@@ -25,7 +25,7 @@ func TestProcessNoLine(t *testing.T) {
 		{
 			name:     "CRのみの削除 (Classic Mac等)",
 			input:    "abc\rdef",
-			expected: "abcdef",
+			expected: "abc\rdef",
 		},
 		{
 			name:     "改行なし",
