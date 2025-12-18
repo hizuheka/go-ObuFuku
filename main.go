@@ -11,7 +11,7 @@ func main() {
 	// サブコマンドが指定されているかチェック
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "Usage: %s <command> [arguments]\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "Available commands: transform, newline\n")
+		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline\n")
 		os.Exit(1)
 	}
 
@@ -52,9 +52,20 @@ func main() {
 		}
 		fmt.Println("Newline processing completed.")
 
+	case "maxline":
+		if len(os.Args) != 3 {
+			fmt.Fprintf(os.Stderr, "Usage: %s maxline <input_file>\n", os.Args[0])
+			os.Exit(1)
+		}
+		inputFile := os.Args[2]
+
+		if err := runMaxLine(inputFile); err != nil {
+			log.Fatalf("Error during maxline processing: %v", err)
+		}
+
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: '%s'\n", subcommand)
-		fmt.Fprintf(os.Stderr, "Available commands: transform, newline\n")
+		fmt.Fprintf(os.Stderr, "Available commands: transform, newline, maxline\n")
 		os.Exit(1)
 	}
 }
