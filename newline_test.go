@@ -22,7 +22,7 @@ func TestNewlineProcessor(t *testing.T) {
 			targets:   []string{"ITEM"},
 			position:  "before",
 			input:     "AAITEMBB",
-			expected:  "AA\nITEMBB",
+			expected:  "AA\r\nITEMBB",
 			chunkSize: 1024,
 		},
 		{
@@ -30,7 +30,7 @@ func TestNewlineProcessor(t *testing.T) {
 			targets:   []string{"ITEM"},
 			position:  "after",
 			input:     "AAITEMBB",
-			expected:  "AAITEM\nBB",
+			expected:  "AAITEM\r\nBB",
 			chunkSize: 1024,
 		},
 		{
@@ -38,7 +38,7 @@ func TestNewlineProcessor(t *testing.T) {
 			targets:   []string{"A"},
 			position:  "after",
 			input:     "AAA",
-			expected:  "A\nA\nA\n",
+			expected:  "A\r\nA\r\nA\r\n",
 			chunkSize: 1024,
 		},
 		{
@@ -47,7 +47,7 @@ func TestNewlineProcessor(t *testing.T) {
 			position: "before",
 			// TARGETの長さは6。ChunkSizeを4にすることで、"TARG" | "ET" のように分割させる
 			input:     "AAATARGETBBB",
-			expected:  "AAA\nTARGETBBB",
+			expected:  "AAA\r\nTARGETBBB",
 			chunkSize: 4, // 非常に小さいバッファサイズ
 		},
 		{
@@ -55,7 +55,7 @@ func TestNewlineProcessor(t *testing.T) {
 			targets:   []string{"XX"},
 			position:  "after",
 			input:     "AXXBXXCXX",
-			expected:  "AXX\nBXX\nCXX\n",
+			expected:  "AXX\r\nBXX\r\nCXX\r\n",
 			chunkSize: 2, // 2バイトずつ読み込む
 		},
 		{
@@ -79,7 +79,7 @@ func TestNewlineProcessor(t *testing.T) {
 			targets:   []string{"A", "B"},
 			position:  "after",
 			input:     "xAxxByyAzz",
-			expected:  "xA\nxxB\nyyA\nzz",
+			expected:  "xA\r\nxxB\r\nyyA\r\nzz",
 			chunkSize: 1024,
 		},
 		{
@@ -87,7 +87,7 @@ func TestNewlineProcessor(t *testing.T) {
 			targets:   []string{"SECOND", "FIRST"},
 			position:  "before",
 			input:     "aaFIRSTbbSECONDcc",
-			expected:  "aa\nFIRSTbb\nSECONDcc",
+			expected:  "aa\r\nFIRSTbb\r\nSECONDcc",
 			chunkSize: 1024,
 		},
 		{
@@ -95,7 +95,7 @@ func TestNewlineProcessor(t *testing.T) {
 			targets:   []string{"LONG", "S"},
 			position:  "before",
 			input:     "aaaLONGbbbSccc",
-			expected:  "aaa\nLONGbbb\nSccc",
+			expected:  "aaa\r\nLONGbbb\r\nSccc",
 			chunkSize: 4, // "LONG" (4文字) が境界で分割されるようにする
 		},
 		{
@@ -103,8 +103,60 @@ func TestNewlineProcessor(t *testing.T) {
 			targets:   []string{",", ";"},
 			position:  "after",
 			input:     "a,b;c,d",
-			expected:  "a,\nb;\nc,\nd",
+			expected:  "a,\r\nb;\r\nc,\r\nd",
 			chunkSize: 10,
+		},
+		{
+			// 修正: 挿入される改行は \r\n になったため、期待値も合わせる
+			name:      "単一ターゲット",
+			targets:   []string{"ITEM"},
+			position:  "before",
+			input:     "AAITEMBB",
+			expected:  "AA\r\nITEMBB",
+			chunkSize: 1024,
+		},
+		{
+			// 修正: 挿入される改行は \r\n
+			name:      "複数ターゲット",
+			targets:   []string{"A", "B"},
+			position:  "after",
+			input:     "xAxxByyAzz",
+			expected:  "xA\r\nxxB\r\nyyA\r\nzz",
+			chunkSize: 1024,
+		},
+		{
+			// 修正: 挿入される改行は \r\n
+			name:      "ターゲットの長さが異なる (Overlap)",
+			targets:   []string{"LONG", "S"},
+			position:  "before",
+			input:     "aaaLONGbbbSccc",
+			expected:  "aaa\r\nLONGbbb\r\nSccc",
+			chunkSize: 4,
+		},
+
+		// *** 新規追加: 元のCRLFが維持されるか確認するケース ***
+		{
+			name:     "入力に含まれるCRLFが二重化しないか確認",
+			targets:  []string{"TARGET"},
+			position: "before",
+			// 入力: 既に \r\n が含まれている
+			input: "Line1\r\nTARGET\r\nLine2",
+			// 期待:
+			// Line1\r\n  -> そのまま (二重化していないこと)
+			// \r\nTARGET -> before指定で挿入されたCRLF + TARGET
+			// \r\nLine2  -> そのまま
+			expected:  "Line1\r\n\r\nTARGET\r\nLine2",
+			chunkSize: 1024,
+		},
+		{
+			name:     "入力に含まれるCRLFが二重化しないか確認 (after)",
+			targets:  []string{"TARGET"},
+			position: "after",
+			input:    "TARGET\r\nNext",
+			// TARGET\r\n -> 挿入されたCRLF
+			// \r\nNext   -> 元のCRLF (そのまま)
+			expected:  "TARGET\r\n\r\nNext",
+			chunkSize: 1024,
 		},
 	}
 

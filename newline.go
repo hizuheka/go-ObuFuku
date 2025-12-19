@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
@@ -43,10 +44,12 @@ func runNewline(targetStrs []string, position, inputPath, outputPath string) err
 	}
 	defer outputFile.Close()
 
-	// CRLF変換ライターを使用（書き込むときは \n だけで済むようにする）
-	crlfWriter := newCRLFWriter(outputFile)
+	// crlfWriter を廃止し、通常のバッファ付きWriterに変更
+	// 元データに含まれる \r\n を二重化させないため
+	writer := bufio.NewWriter(outputFile)
+	defer writer.Flush()
 
-	processor := newNewlineProcessor(inputFile, crlfWriter, targetStrs, position)
+	processor := newNewlineProcessor(inputFile, writer, targetStrs, position)
 	return processor.process()
 }
 
@@ -80,7 +83,10 @@ func newNewlineProcessor(r io.Reader, w io.Writer, targetStrs []string, position
 func (p *NewlineProcessor) process() error {
 	buf := make([]byte, bufferSize)
 	var leftover []byte
-	newline := []byte("\n")
+
+	// 挿入する改行コードを明示的に CRLF (\r\n) にする
+	// これにより、追加した箇所は正しく改行され、元データの改行はそのまま維持される
+	newline := []byte("\r\n")
 
 	for {
 		// バッファに読み込み
