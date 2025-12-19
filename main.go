@@ -79,6 +79,12 @@ func main() {
 		targetArg := os.Args[2]
 		targets := strings.Split(targetArg, ",")
 
+		fmt.Println("--- DEBUG INFO ---")
+		for i, t := range targets {
+			fmt.Printf("Target[%d]: '%s'\n", i, t)
+		}
+		fmt.Println("------------------")
+
 		inputFile := os.Args[3]
 		outputFile := os.Args[4]
 

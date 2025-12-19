@@ -90,6 +90,12 @@ func TestProcessRemove(t *testing.T) {
 			// 2. "bna"    -> "na"削除  -> "b"
 			expected: "b",
 		},
+		{
+			name:     "<?xml version=\"1.0\" ?>",
+			targets:  []string{"0000000000", "<?xml version=\"1.0\" ?>"},
+			input:    "<?xml version=\"1.0\" ?><MATCHING DATA>",
+			expected: "<MATCHING DATA>",
+		},
 	}
 
 	for _, tc := range testCases {
