@@ -70,14 +70,19 @@ func main() {
 
 	case "remove":
 		if len(os.Args) != 5 {
-			fmt.Fprintf(os.Stderr, "Usage: %s remove <target_string> <input_file> <output_file>\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "Usage: %s remove <target_strings> <input_file> <output_file>\n", os.Args[0])
+			fmt.Fprintf(os.Stderr, "  <target_strings>: Comma-separated strings to remove (e.g. \"foo,bar\")\n")
 			os.Exit(1)
 		}
-		targetString := os.Args[2]
+
+		// カンマ区切りで分割してスライスにする
+		targetArg := os.Args[2]
+		targets := strings.Split(targetArg, ",")
+
 		inputFile := os.Args[3]
 		outputFile := os.Args[4]
 
-		if err := runRemove(targetString, inputFile, outputFile); err != nil {
+		if err := runRemove(targets, inputFile, outputFile); err != nil {
 			log.Fatalf("Error during remove processing: %v", err)
 		}
 		fmt.Println("Remove processing completed.")

@@ -8,10 +8,17 @@ import (
 	"strings"
 )
 
-// runRemove は指定された文字列を削除処理を実行します。
-func runRemove(targetStr, inputPath, outputPath string) error {
-	if len(targetStr) == 0 {
-		return fmt.Errorf("target string cannot be empty")
+// runRemove は指定された複数の文字列削除処理を実行します。
+func runRemove(targets []string, inputPath, outputPath string) error {
+	// バリデーション: 少なくとも1つは有効な文字列が必要
+	validTargets := make([]string, 0, len(targets))
+	for _, t := range targets {
+		if len(t) > 0 {
+			validTargets = append(validTargets, t)
+		}
+	}
+	if len(validTargets) == 0 {
+		return fmt.Errorf("target strings cannot be empty")
 	}
 
 	inputFile, err := os.Open(inputPath)
@@ -31,11 +38,11 @@ func runRemove(targetStr, inputPath, outputPath string) error {
 	writer := bufio.NewWriter(outputFile)
 	defer writer.Flush() // 忘れずにFlushする
 
-	return processRemove(inputFile, writer, targetStr)
+	return processRemove(inputFile, writer, validTargets)
 }
 
-// processRemove は読み込んだテキストからターゲット文字列を削除して書き込みます。
-func processRemove(r io.Reader, w io.Writer, targetStr string) error {
+// processRemove は読み込んだテキストから複数のターゲット文字列を削除して書き込みます。
+func processRemove(r io.Reader, w io.Writer, targets []string) error {
 	reader := bufio.NewReader(r)
 
 	for {
@@ -45,21 +52,22 @@ func processRemove(r io.Reader, w io.Writer, targetStr string) error {
 		// 重要: EOFの場合も、そこまで読み込んだデータ(line)と err=io.EOF が同時に返ります。
 		line, err := reader.ReadString('\n')
 
-		// 1. まず、読み込めた分を処理して書き出します
-		// (EOFの場合もデータがあればここで書き出されます)
-		processedLine := strings.ReplaceAll(line, targetStr, "")
+		// 読み込んだ行に対して、指定されたターゲットを順番にすべて削除
+		processedLine := line
+		for _, target := range targets {
+			processedLine = strings.ReplaceAll(processedLine, target, "")
+		}
 
 		// 書き込み
+		// (EOFの場合もデータがあればここで書き出されます)
 		if _, writeErr := w.Write([]byte(processedLine)); writeErr != nil {
 			return fmt.Errorf("failed to write to output: %w", writeErr)
 		}
 
-		// 2. その後でエラー（EOF含む）をチェックします
+		// その後でエラー（EOF含む）をチェックします
 		if err != nil {
 			if err == io.EOF {
-				// 修正ポイント:
-				// 既に上で write しているので、ここでは何もせずループを抜けるだけでOK。
-				// 以前のコードはここで再度 write していたため重複していました。
+				// EOFに到達したらループを抜ける（既に書き込み済み）
 				break
 			}
 			return fmt.Errorf("error reading input: %w", err)

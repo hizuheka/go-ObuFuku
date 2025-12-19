@@ -9,49 +9,49 @@ import (
 func TestProcessRemove(t *testing.T) {
 	testCases := []struct {
 		name     string
-		target   string
+		targets  []string // string -> []string に変更
 		input    string
 		expected string
 	}{
 		{
 			name:     "基本的な削除",
-			target:   "foo",
+			targets:  []string{"foo"},
 			input:    "abc foo bar\nfoo\n",
 			expected: "abc  bar\n\n",
 		},
 		{
 			name:     "1行に複数回出現",
-			target:   "AB",
+			targets:  []string{"AB"},
 			input:    "AB12AB34AB\n",
 			expected: "1234\n",
 		},
 		{
 			name:     "ターゲットが存在しない",
-			target:   "xyz",
+			targets:  []string{"xyz"},
 			input:    "hello world\n",
 			expected: "hello world\n",
 		},
 		{
 			name:     "ターゲットのみの行",
-			target:   "DELETE_ME",
+			targets:  []string{"DELETE_ME"},
 			input:    "DELETE_ME\nKeep\nDELETE_ME",
 			expected: "\nKeep\n",
 		},
 		{
 			name:     "空ファイル",
-			target:   "A",
+			targets:  []string{"A"},
 			input:    "",
 			expected: "",
 		},
 		{
 			name:     "日本語の削除",
-			target:   "削除",
+			targets:  []string{"削除"},
 			input:    "これは削除対象です。\n残る文字。\n",
 			expected: "これは対象です。\n残る文字。\n",
 		},
 		{
-			name:   "CRLF改行の維持確認",
-			target: "BAD",
+			name:    "CRLF改行の維持確認",
+			targets: []string{"BAD"},
 			// 入力: Windows形式の改行
 			input: "Line1 BAD\r\nLine2\r\n",
 			// 期待: 文字は消えるが、\r\n はそのまま維持されること
@@ -59,13 +59,36 @@ func TestProcessRemove(t *testing.T) {
 			expected: "Line1 \r\nLine2\r\n",
 		},
 		{
-			name:   "末尾に改行がないファイルの重複確認",
-			target: "bbb",
+			name:    "末尾に改行がないファイルの重複確認",
+			targets: []string{"bbb"},
 			// 入力: 末尾に改行がない
 			input: "line1\n</aaaa>",
 			// 期待: 重複せず、そのまま出力されること
 			// (バグ時は "line1\n</aaaa></aaaa>" になってしまう)
 			expected: "line1\n</aaaa>",
+		},
+		// 追加テストケース: 改行コードの維持確認
+		{
+			name:     "CRLF改行の維持確認",
+			targets:  []string{"BAD"},
+			input:    "Line1 BAD\r\nLine2\r\n",
+			expected: "Line1 \r\nLine2\r\n",
+		},
+		// 追加テストケース: 末尾改行なしの重複バグ確認
+		{
+			name:     "末尾に改行がないファイルの重複確認",
+			targets:  []string{"bbb"},
+			input:    "line1\n</aaaa>",
+			expected: "line1\n</aaaa>",
+		},
+		// 複数削除の順序確認（例: "banana" から "ana" と "na" を消す）
+		{
+			name:    "削除順序の確認",
+			targets: []string{"ana", "na"},
+			input:   "banana",
+			// 1. "banana" -> "ana"削除 -> "bna"
+			// 2. "bna"    -> "na"削除  -> "b"
+			expected: "b",
 		},
 	}
 
@@ -76,7 +99,7 @@ func TestProcessRemove(t *testing.T) {
 
 			// テストではCRLF変換を行わず、ロジックそのものを検証するため直接Bufferを渡す
 			// (CRLF変換は newCRLFWriter で担保されているため)
-			err := processRemove(inputReader, outputBuf, tc.target)
+			err := processRemove(inputReader, outputBuf, tc.targets)
 			if err != nil {
 				t.Fatalf("processRemove failed: %v", err)
 			}
