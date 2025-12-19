@@ -49,6 +49,15 @@ func TestProcessRemove(t *testing.T) {
 			input:    "これは削除対象です。\n残る文字。\n",
 			expected: "これは対象です。\n残る文字。\n",
 		},
+		{
+			name:   "CRLF改行の維持確認",
+			target: "BAD",
+			// 入力: Windows形式の改行
+			input: "Line1 BAD\r\nLine2\r\n",
+			// 期待: 文字は消えるが、\r\n はそのまま維持されること
+			// (もしロジックがおかしければ \r が消えたりする)
+			expected: "Line1 \r\nLine2\r\n",
+		},
 	}
 
 	for _, tc := range testCases {

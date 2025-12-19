@@ -26,8 +26,10 @@ func runRemove(targetStr, inputPath, outputPath string) error {
 	}
 	defer outputFile.Close()
 
-	// CRLF変換ライターを使用（改行コードの一貫性を保つため）
-	writer := newCRLFWriter(outputFile)
+	// CRLF変換ライターを使うと、元の \r\n が \r\r\n になってしまうため、
+	// 通常のバッファ付きWriterを使用する（入力の改行コードをそのまま維持する）。
+	writer := bufio.NewWriter(outputFile)
+	defer writer.Flush() // 忘れずにFlushする
 
 	return processRemove(inputFile, writer, targetStr)
 }
@@ -37,12 +39,13 @@ func processRemove(r io.Reader, w io.Writer, targetStr string) error {
 	reader := bufio.NewReader(r)
 
 	for {
-		// 行単位で読み込む
+		// ReadStringは、末尾の改行コード(\n または \r\n)を含んで返す
 		// 注意: 行が非常に長い場合、メモリを多く消費する可能性がありますが、
 		// 仕様上「改行されたテキストファイル」とあるため、標準的な行長を想定しています。
 		line, err := reader.ReadString('\n')
 
-		// 読み込んだ行（改行含む）からターゲット文字列を全て削除
+		// 読み込んだ行からターゲット文字列を削除
+		// (改行コードはそのまま残る)
 		processedLine := strings.ReplaceAll(line, targetStr, "")
 
 		// 書き込み
@@ -52,6 +55,13 @@ func processRemove(r io.Reader, w io.Writer, targetStr string) error {
 
 		if err != nil {
 			if err == io.EOF {
+				// 末尾に改行がないケースで、最後の文字列を処理して終了
+				if len(line) > 0 {
+					processedLine := strings.ReplaceAll(line, targetStr, "")
+					if _, writeErr := w.Write([]byte(processedLine)); writeErr != nil {
+						return fmt.Errorf("failed to write to output: %w", writeErr)
+					}
+				}
 				break
 			}
 			return fmt.Errorf("error reading input: %w", err)
