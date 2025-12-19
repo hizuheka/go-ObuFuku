@@ -58,6 +58,15 @@ func TestProcessRemove(t *testing.T) {
 			// (もしロジックがおかしければ \r が消えたりする)
 			expected: "Line1 \r\nLine2\r\n",
 		},
+		{
+			name:   "末尾に改行がないファイルの重複確認",
+			target: "bbb",
+			// 入力: 末尾に改行がない
+			input: "line1\n</aaaa>",
+			// 期待: 重複せず、そのまま出力されること
+			// (バグ時は "line1\n</aaaa></aaaa>" になってしまう)
+			expected: "line1\n</aaaa>",
+		},
 	}
 
 	for _, tc := range testCases {

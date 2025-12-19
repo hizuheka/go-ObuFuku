@@ -42,10 +42,11 @@ func processRemove(r io.Reader, w io.Writer, targetStr string) error {
 		// ReadStringは、末尾の改行コード(\n または \r\n)を含んで返す
 		// 注意: 行が非常に長い場合、メモリを多く消費する可能性がありますが、
 		// 仕様上「改行されたテキストファイル」とあるため、標準的な行長を想定しています。
+		// 重要: EOFの場合も、そこまで読み込んだデータ(line)と err=io.EOF が同時に返ります。
 		line, err := reader.ReadString('\n')
 
-		// 読み込んだ行からターゲット文字列を削除
-		// (改行コードはそのまま残る)
+		// 1. まず、読み込めた分を処理して書き出します
+		// (EOFの場合もデータがあればここで書き出されます)
 		processedLine := strings.ReplaceAll(line, targetStr, "")
 
 		// 書き込み
@@ -53,15 +54,12 @@ func processRemove(r io.Reader, w io.Writer, targetStr string) error {
 			return fmt.Errorf("failed to write to output: %w", writeErr)
 		}
 
+		// 2. その後でエラー（EOF含む）をチェックします
 		if err != nil {
 			if err == io.EOF {
-				// 末尾に改行がないケースで、最後の文字列を処理して終了
-				if len(line) > 0 {
-					processedLine := strings.ReplaceAll(line, targetStr, "")
-					if _, writeErr := w.Write([]byte(processedLine)); writeErr != nil {
-						return fmt.Errorf("failed to write to output: %w", writeErr)
-					}
-				}
+				// 修正ポイント:
+				// 既に上で write しているので、ここでは何もせずループを抜けるだけでOK。
+				// 以前のコードはここで再度 write していたため重複していました。
 				break
 			}
 			return fmt.Errorf("error reading input: %w", err)
